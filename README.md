@@ -29,6 +29,14 @@ steering later and explicitly gives it priority, matching Kiro's behavior.
 omp plugin install github:witooh/omp-steering
 ```
 
+### Upgrade
+
+```bash
+omp plugin install github:witooh/omp-steering
+# or a specific release
+omp plugin install github:witooh/omp-steering#v0.1.1
+```
+
 Link the current checkout instead of installing from git:
 
 ```bash
