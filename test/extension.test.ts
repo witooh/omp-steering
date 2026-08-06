@@ -3,18 +3,24 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import registerKiroSteering, { expandNamedSteeringReferences, renderSteeringPrompt } from "../src/index.js";
+import registerKiroSteering, { renderSteeringPrompt } from "../src/index.js";
 import { parseSteering } from "../src/steering.js";
 
 type Handler = (event: Record<string, unknown>, ctx: ExtensionContext) => Promise<unknown>;
 type Command = { handler: (args: string, ctx: ExtensionContext) => Promise<void> };
+type SentMessage = {
+  content: string;
+  display?: boolean;
+  details?: { targetPath?: string; steeringFiles?: string[] };
+  options?: { deliverAs?: string; triggerTurn?: boolean };
+};
 
 interface MockPi {
   handlers: Map<string, Handler>;
   commands: Map<string, Command>;
-  sentMessages: { content: string }[];
-  sentUserMessages: string[];
+  sentMessages: SentMessage[];
   notifications: string[];
+  messageRenderers: Map<string, unknown>;
   api: ExtensionAPI;
 }
 
@@ -23,15 +29,16 @@ function createMockPi(): MockPi {
     handlers: new Map(),
     commands: new Map(),
     sentMessages: [],
-    sentUserMessages: [],
     notifications: [],
+    messageRenderers: new Map(),
   };
-  // Structural stand-in: the extension only touches these four members.
+  // Structural stand-in: the extension only touches these members.
   const api = {
     on: (event: string, handler: Handler) => mock.handlers.set(event, handler),
     registerCommand: (name: string, command: Command) => mock.commands.set(name, command),
-    sendMessage: (message: { content: string }) => mock.sentMessages.push(message),
-    sendUserMessage: (message: string) => mock.sentUserMessages.push(message),
+    registerMessageRenderer: (customType: string, renderer: unknown) => mock.messageRenderers.set(customType, renderer),
+    sendMessage: (message: Omit<SentMessage, "options">, options?: SentMessage["options"]) =>
+      mock.sentMessages.push({ ...message, options }),
   } as unknown as ExtensionAPI;
   return { ...mock, api };
 }
@@ -64,27 +71,8 @@ describe("renderSteeringPrompt", () => {
   });
 });
 
-describe("expandNamedSteeringReferences", () => {
-  it("replaces known manual and auto #names without touching unrelated hashtags", async () => {
-    const files = [
-      fixtureFile("review", "---\ninclusion: manual\n---\nReview body"),
-      fixtureFile("api", "---\ninclusion: auto\nname: api-design\ndescription: API rules\n---\nAPI body"),
-    ];
-
-    const expanded = await expandNamedSteeringReferences(
-      "Use #review and #api-design but keep #123",
-      files,
-      "/workspace",
-    );
-
-    expect(expanded).toContain("Review body");
-    expect(expanded).toContain("API body");
-    expect(expanded).toContain("#123");
-  });
-});
-
 describe("omp extension integration", () => {
-  it("loads steering, expands manual references, and activates fileMatch before hashline edits", async () => {
+  it("loads steering, injects named refs, and activates fileMatch before hashline edits", async () => {
     const root = await mkdtemp(join(tmpdir(), "omp-steering-ext-"));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
@@ -103,6 +91,28 @@ describe("omp extension integration", () => {
 
     const mock = createMockPi();
     registerKiroSteering(mock.api, { homeDir: home });
+    expect(mock.messageRenderers.has("kiro-steering")).toBe(true);
+    const renderer = mock.messageRenderers.get("kiro-steering") as (
+      message: unknown,
+      options: unknown,
+      theme: unknown,
+    ) => { render: (width: number) => string[] };
+    const rendered = renderer(
+      {
+        customType: "kiro-steering",
+        content: "Review body FULL",
+        display: true,
+        details: { steeringFiles: [".kiro/steering/review.md"], targetPath: "src/Button.tsx" },
+      },
+      { expanded: false },
+      { fg: (_color: string, text: string) => text, bold: (text: string) => text },
+    )
+      .render(120)
+      .join("\n");
+    expect(rendered).toContain(".kiro/steering/review.md");
+    expect(rendered).toContain("src/Button.tsx");
+    expect(rendered).not.toContain("Review body FULL");
+
     const ctx = {
       cwd: workspace,
       ui: { notify: (message: string) => mock.notifications.push(message) },
@@ -119,16 +129,19 @@ describe("omp extension integration", () => {
     expect(beforeResult.systemPrompt[0]).toBe("BASE");
     expect(beforeResult.systemPrompt.at(-1)).toContain("Global body");
 
-    const inputResult = (await fire("input", { source: "interactive", text: "Use #review" })) as {
-      text: string;
-    };
-    expect(inputResult.text).toContain("Review body");
+    // #name keeps user text intact; full body goes via sendMessage with file list in details
+    expect(await fire("input", { source: "interactive", text: "Use #review" })).toBeUndefined();
+    expect(mock.sentMessages.at(-1)?.content).toContain("Review body");
+    expect(mock.sentMessages.at(-1)?.display).toBe(true);
+    expect(mock.sentMessages.at(-1)?.details?.steeringFiles).toEqual([".kiro/steering/review.md"]);
     expect(await fire("input", { source: "extension", text: "Use #review" })).toBeUndefined();
+    expect(mock.sentMessages).toHaveLength(1);
 
     // hashline `edit`: the target only exists inside the patch text
     const editCall = { toolName: "edit", input: { input: "[src/Button.tsx#1A2B]\nPUT 1.=1:\n+const a = 1;\n" } };
     expect(await fire("tool_call", editCall)).toMatchObject({ block: true });
     expect(mock.sentMessages.at(-1)?.content).toContain("React body");
+    expect(mock.sentMessages.at(-1)?.details?.steeringFiles).toEqual([".kiro/steering/react.md"]);
 
     await fire("turn_start", {});
     expect(await fire("tool_call", editCall)).toBeUndefined();
@@ -139,12 +152,15 @@ describe("omp extension integration", () => {
 
     const unmatched = await fire("tool_call", { toolName: "read", input: { path: "src/app.go" } });
     expect(unmatched).toBeUndefined();
-    expect(mock.sentMessages).toHaveLength(2);
+    expect(mock.sentMessages).toHaveLength(3);
 
     expect(mock.commands.has("steering")).toBe(true);
     await mock.commands.get("steering")?.handler("review Check this change", ctx);
-    expect(mock.sentUserMessages.at(-1)).toContain("Review body");
-    expect(mock.sentUserMessages.at(-1)).toContain("User request: Check this change");
+    const steered = mock.sentMessages.at(-1);
+    expect(steered?.content).toContain("Review body");
+    expect(steered?.content).toContain("User request: Check this change");
+    expect(steered?.details?.steeringFiles).toEqual([".kiro/steering/review.md"]);
+    expect(steered?.options?.triggerTurn).toBe(true);
 
     await rm(root, { recursive: true });
   });

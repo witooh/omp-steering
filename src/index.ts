@@ -1,6 +1,14 @@
 import { homedir } from "node:os";
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import type { CustomMessage, ExtensionAPI, ExtensionContext, Theme } from "@oh-my-pi/pi-coding-agent";
+import { Text } from "@oh-my-pi/pi-coding-agent";
 import { discoverSteering, expandFileReferences, matchFileSteering, type SteeringFile } from "./steering.js";
+
+const STEERING_MESSAGE_TYPE = "kiro-steering";
+
+interface SteeringMessageDetails {
+  targetPath?: string;
+  steeringFiles: string[];
+}
 
 interface ExtensionOptions {
   homeDir?: string;
@@ -28,6 +36,9 @@ export default function registerKiroSteering(pi: ExtensionAPI, options: Extensio
     pendingFileRules: new Set(),
   };
 
+  pi.registerMessageRenderer<SteeringMessageDetails>(STEERING_MESSAGE_TYPE, (message, _options, theme) =>
+    renderSteeringMessage(message, theme),
+  );
   pi.on("session_start", async (_event, ctx) => startSession(runtime, ctx));
   pi.on("before_agent_start", async (event, ctx) => {
     await refresh(runtime, ctx);
@@ -38,8 +49,7 @@ export default function registerKiroSteering(pi: ExtensionAPI, options: Extensio
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
     await refresh(runtime, ctx);
-    const expanded = await expandNamedSteeringReferences(event.text, runtime.files, runtime.workspaceRoot);
-    if (expanded !== event.text) return { text: expanded };
+    await injectNamedSteeringReferences(runtime, event.text);
   });
   pi.on("turn_start", () => {
     for (const path of runtime.pendingFileRules) runtime.activeFileRules.add(path);
@@ -96,7 +106,7 @@ async function activateMatchingRules(runtime: SteeringRuntime, toolName: string,
   if (newlyPending.length > 0) {
     runtime.pi.sendMessage(
       {
-        customType: "kiro-steering",
+        customType: STEERING_MESSAGE_TYPE,
         content: await renderActivatedRules(newlyPending, runtime.workspaceRoot, target),
         display: true,
         details: { targetPath: target, steeringFiles: newlyPending.map((file) => file.displayPath) },
@@ -173,9 +183,15 @@ async function runSteeringCommand(runtime: SteeringRuntime, args: string, ctx: E
 
   const request = trimmed.slice(name.length).trim();
   const content = await renderSteeringFile(file, runtime.workspaceRoot);
-  runtime.pi.sendUserMessage(request === "" ? content : `${content}\n\nUser request: ${request}`, {
-    deliverAs: "steer",
-  });
+  runtime.pi.sendMessage(
+    {
+      customType: STEERING_MESSAGE_TYPE,
+      content: request === "" ? content : `${content}\n\nUser request: ${request}`,
+      display: true,
+      details: { steeringFiles: [file.displayPath] },
+    },
+    { deliverAs: "steer", triggerTurn: true },
+  );
 }
 
 export async function renderSteeringPrompt(files: SteeringFile[], workspaceRoot: string): Promise<string> {
@@ -225,26 +241,35 @@ export async function renderSteeringPrompt(files: SteeringFile[], workspaceRoot:
   return sections.join("\n\n");
 }
 
-export async function expandNamedSteeringReferences(
-  text: string,
-  files: SteeringFile[],
-  workspaceRoot: string,
-): Promise<string> {
-  const namedFiles = namedSteeringByName(files);
-  const matches = [...text.matchAll(/#([A-Za-z0-9][A-Za-z0-9-]*)/g)].filter((match) => namedFiles.has(match[1]));
-  if (matches.length === 0) return text;
-
-  let result = "";
-  let cursor = 0;
-  for (const match of matches) {
+async function injectNamedSteeringReferences(runtime: SteeringRuntime, text: string): Promise<void> {
+  const namedFiles = namedSteeringByName(runtime.files);
+  const matched = new Map<string, SteeringFile>();
+  for (const match of text.matchAll(/#([A-Za-z0-9][A-Za-z0-9-]*)/g)) {
     const file = namedFiles.get(match[1]);
-    if (file === undefined) continue;
-    const index = match.index ?? 0;
-    result += text.slice(cursor, index);
-    result += await renderSteeringFile(file, workspaceRoot);
-    cursor = index + match[0].length;
+    if (file !== undefined) matched.set(file.absolutePath, file);
   }
-  return result + text.slice(cursor);
+  if (matched.size === 0) return;
+
+  const files = [...matched.values()];
+  const content = (await Promise.all(files.map((file) => renderSteeringFile(file, runtime.workspaceRoot)))).join(
+    "\n\n",
+  );
+  runtime.pi.sendMessage(
+    {
+      customType: STEERING_MESSAGE_TYPE,
+      content,
+      display: true,
+      details: { steeringFiles: files.map((file) => file.displayPath) },
+    },
+    { deliverAs: "steer" },
+  );
+}
+
+function renderSteeringMessage(message: CustomMessage<SteeringMessageDetails>, theme: Theme): Text {
+  const files = message.details?.steeringFiles ?? [];
+  const label = files.length > 0 ? files.join(", ") : "steering";
+  const target = message.details?.targetPath ? ` for ${message.details.targetPath}` : "";
+  return new Text(theme.fg("customMessageLabel", theme.bold(`kiro-steering ${label}${target}`)), 0, 0);
 }
 
 async function renderActivatedRules(files: SteeringFile[], workspaceRoot: string, targetPath: string): Promise<string> {
