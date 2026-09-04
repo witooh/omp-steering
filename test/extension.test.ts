@@ -164,4 +164,51 @@ describe("omp extension integration", () => {
 
     await rm(root, { recursive: true });
   });
+
+  it("activates fileMatch from apply_patch envelopes and blocks ast_edit", async () => {
+    const root = await mkdtemp(join(tmpdir(), "omp-steering-ext-"));
+    const home = join(root, "home");
+    const workspace = join(root, "workspace");
+    await mkdir(join(home, ".kiro/steering"), { recursive: true });
+    await mkdir(join(workspace, ".kiro/steering"), { recursive: true });
+    await writeFile(
+      join(workspace, ".kiro/steering/react.md"),
+      '---\ninclusion: fileMatch\nfileMatchPattern: "**/*.tsx"\n---\nReact body',
+    );
+    await writeFile(
+      join(workspace, ".kiro/steering/styles.md"),
+      '---\ninclusion: fileMatch\nfileMatchPattern: "**/*.css"\n---\nStyle body',
+    );
+
+    const mock = createMockPi();
+    registerKiroSteering(mock.api, { homeDir: home });
+    const ctx = {
+      cwd: workspace,
+      ui: { notify: (message: string) => mock.notifications.push(message) },
+    } as unknown as ExtensionContext;
+    const fire = async (event: string, payload: Record<string, unknown>) => mock.handlers.get(event)?.(payload, ctx);
+
+    await fire("session_start", {});
+
+    expect(
+      await fire("tool_call", {
+        toolName: "edit",
+        input: {
+          input: "*** Begin Patch\n*** Update File: src/Button.tsx\n+const a = 1;\n*** End Patch\n",
+        },
+      }),
+    ).toMatchObject({ block: true });
+    expect(mock.sentMessages.at(-1)?.content).toContain("React body");
+    expect(mock.sentMessages.at(-1)?.details?.steeringFiles).toEqual([".kiro/steering/react.md"]);
+
+    expect(
+      await fire("tool_call", {
+        toolName: "ast_edit",
+        input: { paths: ["src/app.css"], ops: [{ pat: "x", out: "y" }] },
+      }),
+    ).toMatchObject({ block: true });
+    expect(mock.sentMessages.at(-1)?.content).toContain("Style body");
+
+    await rm(root, { recursive: true });
+  });
 });

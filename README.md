@@ -87,11 +87,12 @@ fileMatchPattern: ["**/*.ts", "**/*.tsx"]
 ```
 
 When an omp file tool opens or modifies a matching path, the extension adds the
-steering file to the conversation context. For the first matching `edit` or
-`write`, the extension blocks the mutation once and asks the agent to retry
-after the steering instructions have been delivered. Targets are read from the
-tool's `path`/`paths` arguments and from the `[path#TAG]` section headers of a
-hashline `edit` patch.
+steering file to the conversation context. For the first matching `edit`,
+`write`, `ast_edit`, or `apply_patch`, the extension blocks the mutation once
+and asks the agent to retry after the steering instructions have been delivered.
+Targets are read from the tool's `path`/`paths` arguments, from `[path#TAG]`
+section headers of a hashline `edit` patch, and from `*** Update File:` envelopes
+in apply_patch mode.
 
 A pattern without a `/` also matches by basename, so `"*.tsx"` covers
 `src/Button.tsx`.

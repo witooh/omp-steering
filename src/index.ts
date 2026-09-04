@@ -23,8 +23,10 @@ interface SteeringRuntime {
   pendingFileRules: Set<string>;
 }
 
-/** `edit` ships its targets as `[path#TAG]` section headers inside the patch text. */
+/** `edit` hashline targets live in `[path#TAG]` headers; apply_patch uses `*** Update File:` envelopes. */
 const HASHLINE_HEADER = /^\s*\[([^\]\r\n]+?)(?:#[0-9a-fA-F]{4})?\]\s*$/gm;
+const APPLY_PATCH_FILE = /^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm;
+const MUTATING_TOOLS: Record<string, true> = { edit: true, write: true, ast_edit: true, apply_patch: true };
 
 export default function registerKiroSteering(pi: ExtensionAPI, options: ExtensionOptions = {}): void {
   const runtime: SteeringRuntime = {
@@ -115,7 +117,7 @@ async function activateMatchingRules(runtime: SteeringRuntime, toolName: string,
     );
   }
 
-  if (toolName === "edit" || toolName === "write") {
+  if (MUTATING_TOOLS[toolName] === true) {
     return {
       block: true as const,
       reason: `Kiro fileMatch steering was added for ${target}. Retry this mutation on the next turn.`,
@@ -125,9 +127,9 @@ async function activateMatchingRules(runtime: SteeringRuntime, toolName: string,
 
 /**
  * Every filesystem target the call touches: the plain `path`/`paths` fields most
- * tools expose, plus the hashline section headers carried by `edit`. A `read`
- * path may carry a selector suffix (`file.ts:50-200`), so its bare path is
- * offered as well.
+ * tools expose, hashline `[path#TAG]` headers, and apply_patch file envelopes.
+ * A `read` path may carry a selector suffix (`file.ts:50-200`), so its bare path
+ * is offered as well.
  */
 function toolPaths(input: unknown): string[] {
   if (input === null || typeof input !== "object") return [];
@@ -148,6 +150,7 @@ function toolPaths(input: unknown): string[] {
     const patch = record[key];
     if (typeof patch !== "string") continue;
     for (const match of patch.matchAll(HASHLINE_HEADER)) paths.add(match[1].trim());
+    for (const match of patch.matchAll(APPLY_PATCH_FILE)) paths.add(match[1].trim());
   }
 
   return [...paths];
