@@ -69,6 +69,14 @@ grok plugin enable omp-steering
 
 `--trust` lets the hooks run. `enable` is separate: Grok leaves plugins off until they are listed in `[plugins].enabled` or enabled in the Plugins tab (`/plugins`, then Space). Start a new session after enabling.
 
+Grok 1.0.30 discovers plugin `hooks/hooks.json` but does not dispatch those commands into `hook_execution`. `fileMatch` deny therefore never fires from the plugin file alone. After install, copy the user-global overlay (then start a new session, or reload hooks with `/hooks`):
+
+```bash
+./hooks/install-user-hook.sh
+```
+
+That writes `~/.grok/hooks/omp-steering.json`, which Grok does run. Plugin-bundled hooks still use `${GROK_PLUGIN_ROOT}/hooks/run.sh` for hosts that dispatch them.
+
 ```bash
 grok plugin update omp-steering
 grok plugin uninstall omp-steering --confirm
@@ -193,7 +201,9 @@ The path must remain inside the workspace. Each referenced file is limited to
 - `#name` expansion runs on omp's `input` event (interactive and RPC prompts)
   and on Grok's `UserPromptSubmit` hook. Use `/steering <name>` elsewhere.
 - Grok hooks require bun on PATH. SessionStart / UserPromptSubmit injection is
-  best-effort on Grok 1.0.30; see [Grok Build](#grok-build).
+  best-effort on Grok 1.0.30 even after the hook runs; see [Grok Build](#grok-build).
+  On 1.0.30, plugin-bundled `hooks.json` is discovered but not dispatched — run
+  `./hooks/install-user-hook.sh` so `fileMatch` deny can fire.
 - Workspace steering is always read; omp has no project-trust gate.
 - `auto` relies on the model to compare the request with each `description`, so
   descriptions should be precise and specific.

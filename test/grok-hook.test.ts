@@ -258,4 +258,40 @@ describe("Grok plugin package", () => {
     expect(result.exitCode).toBe(0);
     expect(output).toMatch(/Plugin manifest is valid/i);
   });
+
+  it("declares the hooks file in plugin manifests and uses GROK_PLUGIN_ROOT in commands", async () => {
+    const root = join(import.meta.dir, "..");
+    const plugin = JSON.parse(await readFile(join(root, "plugin.json"), "utf8")) as { hooks?: string };
+    const grok = JSON.parse(await readFile(join(root, ".grok-plugin/plugin.json"), "utf8")) as {
+      hooks?: string;
+    };
+    expect(plugin.hooks).toBe("./hooks/hooks.json");
+    expect(grok.hooks).toBe("./hooks/hooks.json");
+
+    const hooks = JSON.parse(await readFile(join(root, "hooks/hooks.json"), "utf8")) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    const commands = Object.values(hooks.hooks).flatMap((groups) =>
+      groups.flatMap((group) => group.hooks.map((handler) => handler.command)),
+    );
+    expect(commands.length).toBeGreaterThan(0);
+    const pluginRootCommand = "$" + "{GROK_PLUGIN_ROOT}/hooks/run.sh";
+    for (const command of commands) {
+      expect(command).toContain(pluginRootCommand);
+    }
+
+    const overlay = JSON.parse(await readFile(join(root, "hooks/grok-user-global.json"), "utf8")) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(Object.keys(overlay.hooks).sort()).toEqual(["PreToolUse", "SessionStart", "UserPromptSubmit"]);
+    const overlayCommands = Object.values(overlay.hooks).flatMap((groups) =>
+      groups.flatMap((group) => group.hooks.map((handler) => handler.command)),
+    );
+    expect(overlayCommands.length).toBe(3);
+    for (const command of overlayCommands) {
+      expect(command).toContain("plugin.json");
+      expect(command).toContain("hooks/run.sh");
+      expect(command).toContain('"name": "omp-steering"');
+    }
+  });
 });
