@@ -49,18 +49,26 @@ the next step.
 ## 4. Bump, commit, tag
 
 ```bash
-bun pm version <increment> -m "Release v%s"
+bun pm version <increment> --no-git-tag-version
 ```
 
-One command: writes `package.json`, commits `Release vX.Y.Z`, tags `vX.Y.Z`.
+Then copy that same `X.Y.Z` into `plugin.json` and `.grok-plugin/plugin.json`
+(`version` only). Commit and tag together:
+
+```bash
+git add package.json plugin.json .grok-plugin/plugin.json
+git commit -m "Release vX.Y.Z"
+git tag vX.Y.Z
+```
+
 Verify:
 
 ```bash
 git show --stat HEAD && git describe --tags --abbrev=0
 ```
 
-Only `package.json` may appear in that commit, and the tag carries the `v`
-prefix — this repo tags `v0.1.0`, never `0.1.0`.
+Those three version files may appear in that commit, and the tag carries the
+`v` prefix — this repo tags `v0.1.0`, never `0.1.0`.
 
 ## 5. Push
 
@@ -82,6 +90,7 @@ gh release create vX.Y.Z --title vX.Y.Z --notes "$(cat <<'EOF'
 
 ```bash
 omp plugin install github:witooh/omp-steering#vX.Y.Z
+grok plugin install witooh/omp-steering --trust
 ```
 EOF
 )"

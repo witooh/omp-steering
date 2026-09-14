@@ -1,7 +1,7 @@
 {
   "name": "@witooh/omp-steering",
   "version": "0.1.2",
-  "description": "Load Kiro steering files into omp",
+  "description": "Load Kiro steering files into omp and Grok",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,6 +12,7 @@
     "omp-package",
     "omp",
     "omp-extension",
+    "grok",
     "kiro",
     "steering"
   ],

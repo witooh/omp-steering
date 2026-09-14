@@ -1,6 +1,6 @@
 # omp-steering
 
-An omp extension that reads [Kiro Steering](https://kiro.dev/docs/steering/)
+An omp extension and Grok plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
 from existing projects without requiring files to be moved or rules to be
 rewritten.
 
@@ -8,7 +8,7 @@ rewritten.
 
 <!-- markdownlint-disable MD013 -->
 
-| Kiro Steering | Behavior in omp |
+| Kiro Steering | Behavior |
 | --- | --- |
 | Global scope | Reads `~/.kiro/steering/**/*.md` |
 | Workspace scope | Reads `<cwd>/.kiro/steering/**/*.md` |
@@ -20,10 +20,16 @@ rewritten.
 
 <!-- markdownlint-enable MD013 -->
 
-When global and workspace instructions conflict, the extension places workspace
-steering later and explicitly gives it priority, matching Kiro's behavior.
+When global and workspace instructions conflict, workspace steering is placed
+later and explicitly given priority, matching Kiro's behavior.
+
+On omp, `always` files are appended to the system prompt. On Grok they are
+emitted from SessionStart and the first `UserPromptSubmit` (best-effort; see
+[Grok Build](#grok-build)) and from the `/steering` skill.
 
 ## Installation
+
+### omp
 
 ```bash
 omp plugin install github:witooh/omp-steering
@@ -51,6 +57,41 @@ omp -e /path/to/omp-steering
 ```
 
 omp loads the package through `omp.extensions` in `package.json`.
+
+### Grok Build
+
+The repo is a native Grok plugin (`plugin.json`, `hooks/hooks.json`, `skills/steering`). bun must be on PATH so the hooks can run.
+
+```bash
+grok plugin install witooh/omp-steering --trust
+grok plugin enable omp-steering
+```
+
+`--trust` lets the hooks run. `enable` is separate: Grok leaves plugins off until they are listed in `[plugins].enabled` or enabled in the Plugins tab (`/plugins`, then Space). Start a new session after enabling.
+
+```bash
+grok plugin update omp-steering
+grok plugin uninstall omp-steering --confirm
+```
+
+Or add this repo as a marketplace, then install by catalog name (that clones GitHub, not a local working tree):
+
+```bash
+grok plugin marketplace add witooh/omp-steering
+grok plugin install omp-steering --trust
+grok plugin enable omp-steering
+```
+
+Local checkout:
+
+```bash
+grok plugin install . --trust
+grok plugin enable omp-steering
+```
+
+`/steering` (or `/omp-steering:steering` on a name collision) lists or loads a manual/auto file. `#name` in a prompt is handled by the `UserPromptSubmit` hook.
+
+Grok 1.0.30 **runs** the SessionStart and UserPromptSubmit hooks. The official hooks guide says those events discard stdout / `additionalContext`, so always-included bodies may not land in the model context. The `/steering` skill is the fallback for `always` and `auto`. `fileMatch` on a mutating tool (`search_replace`, `write`, `edit`) is a `PreToolUse` deny whose reason **does** reach the model; Grok clips that reason at 10,000 characters.
 
 ## Examples
 
@@ -86,13 +127,14 @@ fileMatchPattern: ["**/*.ts", "**/*.tsx"]
 # TypeScript conventions
 ```
 
-When an omp file tool opens or modifies a matching path, the extension adds the
-steering file to the conversation context. For the first matching `edit`,
-`write`, `ast_edit`, or `apply_patch`, the extension blocks the mutation once
-and asks the agent to retry after the steering instructions have been delivered.
-Targets are read from the tool's `path`/`paths` arguments, from `[path#TAG]`
-section headers of a hashline `edit` patch, and from `*** Update File:` envelopes
-in apply_patch mode.
+When a file tool opens or modifies a matching path, the package adds the
+steering file to the conversation context. For the first matching mutation
+(`edit` / `write` / `ast_edit` / `apply_patch` in omp; `search_replace` /
+`write` / `edit` in Grok), it blocks the mutation once and asks the agent to
+retry after the steering instructions have been delivered.
+Targets are read from `path` / `paths` (omp), `target_file` / `file_path` /
+`target_directory` (Grok), from `[path#TAG]` section headers of a hashline
+`edit` patch, and from `*** Update File:` envelopes in apply_patch mode.
 
 A pattern without a `/` also matches by basename, so `"*.tsx"` covers
 `src/Button.tsx`.
@@ -148,8 +190,10 @@ The path must remain inside the workspace. Each referenced file is limited to
   Shell commands and custom tools that hide paths inside command text rely on
   the steering index, which instructs the agent to load matching rules before
   proceeding.
-- `#name` expansion runs on the `input` event, which omp emits for interactive
-  and RPC prompts only. Use `/steering <name>` elsewhere.
+- `#name` expansion runs on omp's `input` event (interactive and RPC prompts)
+  and on Grok's `UserPromptSubmit` hook. Use `/steering <name>` elsewhere.
+- Grok hooks require bun on PATH. SessionStart / UserPromptSubmit injection is
+  best-effort on Grok 1.0.30; see [Grok Build](#grok-build).
 - Workspace steering is always read; omp has no project-trust gate.
 - `auto` relies on the model to compare the request with each `description`, so
   descriptions should be precise and specific.
@@ -169,3 +213,4 @@ bun run lint
 
 - Kiro Steering: <https://kiro.dev/docs/steering/>
 - omp Extensions: <https://omp.sh>
+- Grok plugins: `grok plugin validate` in this checkout
