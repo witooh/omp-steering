@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$HOME\"/.grok/installed-plugins/* \"$HOME\"/.grok/plugins/*; do [ -f \"$d/hooks/run.sh\" ] && [ -f \"$d/plugin.json\" ] && grep -q '\"name\": \"omp-steering\"' \"$d/plugin.json\" && exec \"$d/hooks/run.sh\"; done",
+            "command": "bash ~/.grok/hooks/omp-steering-run.sh",
             "timeout": 15
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$HOME\"/.grok/installed-plugins/* \"$HOME\"/.grok/plugins/*; do [ -f \"$d/hooks/run.sh\" ] && [ -f \"$d/plugin.json\" ] && grep -q '\"name\": \"omp-steering\"' \"$d/plugin.json\" && exec \"$d/hooks/run.sh\"; done",
+            "command": "bash ~/.grok/hooks/omp-steering-run.sh",
             "timeout": 10
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for d in \"$HOME\"/.grok/installed-plugins/* \"$HOME\"/.grok/plugins/*; do [ -f \"$d/hooks/run.sh\" ] && [ -f \"$d/plugin.json\" ] && grep -q '\"name\": \"omp-steering\"' \"$d/plugin.json\" && exec \"$d/hooks/run.sh\"; done",
+            "command": "bash ~/.grok/hooks/omp-steering-run.sh",
             "timeout": 10
           }
         ]

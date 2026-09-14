@@ -4,7 +4,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-DEST="${HOME}/.grok/hooks/omp-steering.json"
-mkdir -p "$(dirname "$DEST")"
-cp "$ROOT/grok-user-global.json" "$DEST"
-printf 'Installed %s\n' "$DEST"
+HOOKS="${HOME}/.grok/hooks"
+mkdir -p "$HOOKS"
+cp "$ROOT/user-global-run.sh" "$HOOKS/omp-steering-run.sh"
+chmod +x "$HOOKS/omp-steering-run.sh"
+cp "$ROOT/grok-user-global.json" "$HOOKS/omp-steering.json"
+printf 'Installed %s\n' "$HOOKS/omp-steering.json"

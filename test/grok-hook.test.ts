@@ -289,9 +289,11 @@ describe("Grok plugin package", () => {
     );
     expect(overlayCommands.length).toBe(3);
     for (const command of overlayCommands) {
-      expect(command).toContain("plugin.json");
-      expect(command).toContain("hooks/run.sh");
-      expect(command).toContain('"name": "omp-steering"');
+      expect(command).toBe("bash ~/.grok/hooks/omp-steering-run.sh");
+      expect(command).not.toMatch(/\$d|\$\{d\}/);
     }
+    const runner = await readFile(join(root, "hooks/user-global-run.sh"), "utf8");
+    expect(runner).toContain("hooks/run.sh");
+    expect(runner).toContain('"name": "omp-steering"');
   });
 });
