@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "omp-steering",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Load Kiro steering files into Grok and omp without rewriting them as project rules.",
   "author": {
     "name": "witooh"
