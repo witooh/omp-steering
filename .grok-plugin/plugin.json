@@ -1,6 +1,6 @@
 {
   "name": "omp-steering",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Load Kiro steering files into Grok without rewriting them as project rules.",
   "author": {
     "name": "witooh"

@@ -1,6 +1,6 @@
 {
   "name": "@witooh/omp-steering",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Load Kiro steering files into omp and Grok",
   "type": "module",
   "license": "MIT",
