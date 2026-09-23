@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bash ./hooks/cursor-run.sh",
+        "timeout": 15
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "bash ./hooks/cursor-run.sh",
+        "timeout": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "bash ./hooks/cursor-run.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}

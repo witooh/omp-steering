@@ -1,0 +1,15 @@
+{
+  "name": "omp-steering",
+  "displayName": "omp-steering",
+  "version": "0.1.5",
+  "description": "Load Kiro steering files into Cursor without rewriting them as project rules.",
+  "author": {
+    "name": "witooh"
+  },
+  "homepage": "https://github.com/witooh/omp-steering",
+  "repository": "https://github.com/witooh/omp-steering",
+  "license": "MIT",
+  "keywords": ["omp", "cursor", "kiro", "steering"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks-cursor.json"
+}

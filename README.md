@@ -1,6 +1,6 @@
 # omp-steering
 
-An omp extension and Grok plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
+An omp extension, Grok plugin, and Cursor plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
 from existing projects without requiring files to be moved or rules to be
 rewritten.
 
@@ -23,9 +23,9 @@ rewritten.
 When global and workspace instructions conflict, workspace steering is placed
 later and explicitly given priority, matching Kiro's behavior.
 
-On omp, `always` files are appended to the system prompt. On Grok they are
-emitted from SessionStart and the first `UserPromptSubmit` (best-effort; see
-[Grok Build](#grok-build)) and from the `/steering` skill.
+On omp, `always` files are appended to the system prompt. On Grok and Cursor they are
+emitted from session start (and the first prompt, when that hook runs) and from the
+`/steering` skill. Grok injection is best-effort; see [Grok Build](#grok-build).
 
 ## Installation
 
@@ -57,6 +57,30 @@ omp -e /path/to/omp-steering
 ```
 
 omp loads the package through `omp.extensions` in `package.json`.
+
+### Cursor
+
+The repo is a Cursor plugin (`.cursor-plugin/plugin.json`, `skills/steering`, `hooks/hooks-cursor.json`). Add it from the GitHub repository; bun must be on PATH so the hooks can run.
+
+```text
+/add-plugin https://github.com/witooh/omp-steering
+```
+
+`sessionStart` injects `always` steering and the fileMatch/auto/manual index. `beforeSubmitPrompt` expands `#name`. `preToolUse` denies the first matching mutation (`Write`, `Edit`, and the other edit tools) once so the steering arrives before the retry, and injects matching steering on a read. Cursor has no prompt-submit context field besides blocking, so `#name` is injected as `additional_context` only when the host accepts it; `/steering` remains the fallback.
+
+Cloud Agents do not run `/add-plugin` during a Build, and they do not load `~/.cursor/hooks.json`. They do scan `~/.cursor/skills`. Put the installer in `environment.json` `install`, not `start`: `install` runs while Cursor creates a Build, and the resulting disk is snapshotted.
+
+```bash
+./scripts/install-cursor-cloud.sh
+```
+
+From a service repo that does not contain this checkout, pin a tag:
+
+```bash
+OMP_STEERING_REF=v0.1.5 ./scripts/install-cursor-cloud.sh
+```
+
+That copies `skills/steering` into `~/.cursor/skills` and does not touch the working tree. A later commit is invisible until the next successful Build.
 
 ### Grok Build
 
@@ -210,6 +234,7 @@ The path must remain inside the workspace. Each referenced file is limited to
 - The workspace root is the current working directory used to start omp.
 - Steering files with invalid frontmatter are skipped with a warning rather than
   loaded under the wrong inclusion mode.
+- Cursor `sessionStart` is not available in cloud agents. Project hooks from an installed plugin still need bun on PATH. `#name` on Cursor depends on `beforeSubmitPrompt` accepting `additional_context`; if it does not, use `/steering <name>`.
 
 ## Development
 
