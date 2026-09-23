@@ -1,36 +1,69 @@
 #!/usr/bin/env bash
-# Dispatch stdin JSON to the Cursor hook. bun is required (same runtime as the omp extension).
+# Cursor sessionStart hook. Reads Kiro steering markdown and injects it.
+# Shell only. Inclusion modes are ignored: every *.md is context, the way
+# other harnesses read an instruction file they do not specially understand.
 set -euo pipefail
 
-ROOT="${CURSOR_PLUGIN_ROOT:-}"
-if [ -z "$ROOT" ]; then
-  ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-fi
+cat >/dev/null
 
-find_bun() {
-  if command -v bun >/dev/null 2>&1; then
-    command -v bun
-    return
-  fi
-  for candidate in "${HOME}/.bun/bin/bun" /opt/homebrew/bin/bun /usr/local/bin/bun; do
-    if [ -x "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return
-    fi
-  done
-  return 1
+MAX_CHARS=100000
+
+escape_for_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
 }
 
-HOOK="$ROOT/src/cursor-hook.ts"
-if [ ! -f "$HOOK" ]; then
-  printf '%s\n' '{"additional_context":"omp-steering: cursor hook script is missing from the plugin install."}'
+strip_frontmatter() {
+  awk '
+    NR == 1 && $0 == "---" { skip = 1; next }
+    skip && $0 == "---" { skip = 0; next }
+    !skip { print }
+  ' "$1"
+}
+
+append_tree() {
+  local root="$1"
+  local label="$2"
+  local file body
+  if [ ! -d "$root" ]; then
+    return 0
+  fi
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    body="$(strip_frontmatter "$file")"
+    if [ -z "$body" ]; then
+      continue
+    fi
+    if [ -n "$context" ]; then
+      context="${context}"$'\n\n'
+    fi
+    context="${context}## ${label}/${file#"$root"/}"$'\n\n'"${body}"
+  done <<EOF
+$(find "$root" -type f -name '*.md' | sort)
+EOF
+}
+
+context=""
+if [ -n "${HOME:-}" ]; then
+  append_tree "$HOME/.kiro/steering" "~/.kiro/steering"
+fi
+workspace="${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-}}"
+if [ -n "$workspace" ]; then
+  append_tree "$workspace/.kiro/steering" ".kiro/steering"
+fi
+
+if [ -z "$context" ]; then
   exit 0
 fi
 
-BUN="$(find_bun || true)"
-if [ -z "$BUN" ]; then
-  printf '%s\n' '{"additional_context":"omp-steering: bun is required on PATH to load Kiro steering files."}'
-  exit 0
+if [ "${#context}" -gt "$MAX_CHARS" ]; then
+  context="${context:0:$((MAX_CHARS - 14))}"$'\n[truncated]'
 fi
 
-exec "$BUN" "$HOOK"
+escaped="$(escape_for_json "$context")"
+printf '{"additional_context":"%s"}\n' "$escaped"

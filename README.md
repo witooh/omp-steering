@@ -23,9 +23,11 @@ rewritten.
 When global and workspace instructions conflict, workspace steering is placed
 later and explicitly given priority, matching Kiro's behavior.
 
-On omp, `always` files are appended to the system prompt. On Grok and Cursor they are
+On omp, `always` files are appended to the system prompt. On Grok they are
 emitted from session start (and the first prompt, when that hook runs) and from the
 `/steering` skill. Grok injection is best-effort; see [Grok Build](#grok-build).
+On Cursor, the plugin hook concatenates every steering markdown file into the
+session and does not apply inclusion modes.
 
 ## Installation
 
@@ -60,13 +62,15 @@ omp loads the package through `omp.extensions` in `package.json`.
 
 ### Cursor
 
-The repo is a Cursor plugin (`.cursor-plugin/plugin.json`, `skills/steering`, `hooks/hooks-cursor.json`). Add it from the GitHub repository; bun must be on PATH so the hooks can run.
+The repo is a Cursor plugin (`.cursor-plugin/marketplace.json`, `.cursor-plugin/plugin.json`, `skills/steering`, `hooks/hooks-cursor.json`). Add the GitHub repository as a marketplace, then install `omp-steering`. The hook is bash. It does not need bun.
 
 ```text
 /add-plugin https://github.com/witooh/omp-steering
 ```
 
-`sessionStart` injects `always` steering and the fileMatch/auto/manual index. `beforeSubmitPrompt` expands `#name`. `preToolUse` denies the first matching mutation (`Write`, `Edit`, and the other edit tools) once so the steering arrives before the retry, and injects matching steering on a read. Cursor has no prompt-submit context field besides blocking, so `#name` is injected as `additional_context` only when the host accepts it; `/steering` remains the fallback.
+Cursor reads `.cursor-plugin/marketplace.json` first. The only entry is `omp-steering` at `source: "./"`. A repo with only `plugin.json` does not show up in that marketplace list.
+
+`sessionStart` reads `~/.kiro/steering/**/*.md` and `<cwd>/.kiro/steering/**/*.md`, strips YAML frontmatter, and injects the bodies. Workspace files come after global files. `fileMatch`, `manual`, and `auto` are not applied: every file is context, the same way another harness would read instruction files it does not specially understand. `/steering` remains available if the hook did not run.
 
 Cloud Agents do not run `/add-plugin` during a Build, and they do not load `~/.cursor/hooks.json`. They do scan `~/.cursor/skills`. Put the installer in `environment.json` `install`, not `start`: `install` runs while Cursor creates a Build, and the resulting disk is snapshotted.
 
@@ -234,7 +238,7 @@ The path must remain inside the workspace. Each referenced file is limited to
 - The workspace root is the current working directory used to start omp.
 - Steering files with invalid frontmatter are skipped with a warning rather than
   loaded under the wrong inclusion mode.
-- Cursor `sessionStart` is not available in cloud agents. Project hooks from an installed plugin still need bun on PATH. `#name` on Cursor depends on `beforeSubmitPrompt` accepting `additional_context`; if it does not, use `/steering <name>`.
+- Cursor's hook injects every steering markdown file at `sessionStart` and ignores inclusion modes. `sessionStart` does not run in cloud agents, so a Cloud Agent only has the `/steering` skill from `install-cursor-cloud.sh`.
 
 ## Development
 

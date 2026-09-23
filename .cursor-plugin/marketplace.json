@@ -1,0 +1,16 @@
+{
+  "name": "omp-steering",
+  "owner": {
+    "name": "Witoo Harianto"
+  },
+  "metadata": {
+    "description": "Load Kiro steering files into Cursor without rewriting them as project rules."
+  },
+  "plugins": [
+    {
+      "name": "omp-steering",
+      "source": "./",
+      "description": "Load Kiro steering files (always, fileMatch, manual, auto) into Cursor."
+    }
+  ]
+}
