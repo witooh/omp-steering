@@ -10,18 +10,19 @@ import {
 } from "./render.js";
 import { discoverSteering, matchFileSteering, type SteeringFile } from "./steering.js";
 
-/** Grok clips PreToolUse deny reasons and additionalContext at 10_000 characters. */
+/** Grok and Claude Code clip PreToolUse deny reasons and additionalContext at 10_000 characters. */
 export const GROK_CONTEXT_CAP = 10_000;
 
-const MUTATING_TOOLS = new Set([
-  "search_replace",
-  "write",
-  "edit",
-  "apply_patch",
-  "ast_edit",
-  "multiedit",
-  "strreplace",
-]);
+const MUTATING_TOOLS: Record<string, true> = {
+  search_replace: true,
+  write: true,
+  edit: true,
+  notebookedit: true,
+  apply_patch: true,
+  ast_edit: true,
+  multiedit: true,
+  strreplace: true,
+};
 
 export interface GrokHookOptions {
   homeDir?: string;
@@ -35,6 +36,8 @@ export interface GrokHookOutput {
   hookSpecificOutput?: {
     hookEventName: string;
     additionalContext?: string;
+    permissionDecision?: "deny";
+    permissionDecisionReason?: string;
   };
 }
 
@@ -131,12 +134,20 @@ async function preToolUse(
       ? await renderActivatedRules(newly, workspaceRoot, target)
       : `Kiro fileMatch steering activated for ${target}.`;
   const toolName = String(event.toolName ?? event.tool_name ?? "").toLowerCase();
-  if (MUTATING_TOOLS.has(toolName)) {
+  if (MUTATING_TOOLS[toolName] === true) {
     const reason = clip(
       `${content}\n\nRetry this mutation on the next turn.`,
       `Kiro fileMatch steering was added for ${target}. Read the matching files under .kiro/steering before retrying this mutation.`,
     );
-    return { decision: "deny", reason };
+    return {
+      decision: "deny",
+      reason,
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: reason,
+      },
+    };
   }
 
   return contextOutput("PreToolUse", content);
@@ -200,7 +211,10 @@ async function loadSteering(event: Record<string, unknown>, options: GrokHookOpt
     workspaceRoot,
     sessionId: sessionOf(event),
     pluginData:
-      options.pluginData ?? process.env.GROK_PLUGIN_DATA ?? join(homedir(), ".grok", "plugin-data", "omp-steering"),
+      options.pluginData ??
+      process.env.CLAUDE_PLUGIN_DATA ??
+      process.env.GROK_PLUGIN_DATA ??
+      join(homedir(), ".grok", "plugin-data", "omp-steering"),
   };
 }
 

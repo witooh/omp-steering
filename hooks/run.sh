@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dispatch stdin JSON to the Grok hook. bun is required (same runtime as the omp extension).
+# Dispatch stdin JSON to the Grok / Claude Code hook. bun is required (same runtime as the omp extension).
 set -euo pipefail
 
 ROOT="${GROK_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"

@@ -1,6 +1,6 @@
 # omp-steering
 
-An omp extension, Grok plugin, and Cursor plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
+An omp extension, Grok plugin, Cursor plugin, and Claude Code plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
 from existing projects without requiring files to be moved or rules to be
 rewritten.
 
@@ -23,9 +23,10 @@ rewritten.
 When global and workspace instructions conflict, workspace steering is placed
 later and explicitly given priority, matching Kiro's behavior.
 
-On omp, `always` files are appended to the system prompt. On Grok they are
+On omp, `always` files are appended to the system prompt. On Grok and Claude Code they are
 emitted from session start (and the first prompt, when that hook runs) and from the
 `/steering` skill. Grok injection is best-effort; see [Grok Build](#grok-build).
+Claude Code delivers that context; see [Claude Code](#claude-code).
 On Cursor, the plugin hook concatenates every steering markdown file into the
 session and does not apply inclusion modes.
 
@@ -129,6 +130,32 @@ grok plugin enable omp-steering
 
 Grok 1.0.30 **runs** the SessionStart and UserPromptSubmit hooks. The official hooks guide says those events discard stdout / `additionalContext`, so always-included bodies may not land in the model context. The `/steering` skill is the fallback for `always` and `auto`. `fileMatch` on a mutating tool (`search_replace`, `write`, `edit`) is a `PreToolUse` deny whose reason **does** reach the model; Grok clips that reason at 10,000 characters.
 
+### Claude Code
+
+The repo is a Claude Code plugin (`.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json`, `skills/steering`, `hooks/hooks.json`). bun must be on PATH so the hooks can run. Claude Code loads `hooks/hooks.json` from the plugin root. That file is shared with Grok. The command uses `${GROK_PLUGIN_ROOT}` when it is set, and `${CLAUDE_PLUGIN_ROOT}` otherwise.
+
+```bash
+claude plugin marketplace add witooh/omp-steering
+claude plugin install omp-steering@omp-steering
+```
+
+Load this checkout for one session instead of installing it:
+
+```bash
+claude --plugin-dir .
+```
+
+Or register the checkout as a marketplace, then install by catalog name:
+
+```bash
+claude plugin marketplace add .
+claude plugin install omp-steering@omp-steering
+```
+
+`/steering` (or `/omp-steering:steering` on a name collision) lists or loads a manual/auto file. `#name` in a prompt is handled by the `UserPromptSubmit` hook.
+
+Claude Code delivers `SessionStart` and `UserPromptSubmit` `additionalContext`. A matching `Read` delivers the `fileMatch` body through `PreToolUse` `additionalContext`. `Edit`, `Write`, and `NotebookEdit` do not reach that hook until the file has been read, so that read is the usual activation. A mutation is denied once only when it is the first matching call. `additionalContext` and deny reasons are capped at 10,000 characters. The first `UserPromptSubmit` repeats the session index. A cloud session does not load plugins installed only on your machine.
+
 ## Examples
 
 ### Always included
@@ -167,9 +194,12 @@ When a file tool opens or modifies a matching path, the package adds the
 steering file to the conversation context. For the first matching mutation
 (`edit` / `write` / `ast_edit` / `apply_patch` in omp; `search_replace` /
 `write` / `edit` in Grok), it blocks the mutation once and asks the agent to
-retry after the steering instructions have been delivered.
+retry after the steering instructions have been delivered. On Claude Code the
+same deny applies only if `Edit`, `Write`, or `NotebookEdit` is the first
+matching call. A prior matching `Read` already delivered the body, so the
+later mutation is not denied by this plugin.
 Targets are read from `path` / `paths` (omp), `target_file` / `file_path` /
-`target_directory` (Grok), from `[path#TAG]` section headers of a hashline
+`target_directory` (Grok), `file_path` / `notebook_path` (Claude Code), from `[path#TAG]` section headers of a hashline
 `edit` patch, and from `*** Update File:` envelopes in apply_patch mode.
 
 A pattern without a `/` also matches by basename, so `"*.tsx"` covers
@@ -227,11 +257,12 @@ The path must remain inside the workspace. Each referenced file is limited to
   the steering index, which instructs the agent to load matching rules before
   proceeding.
 - `#name` expansion runs on omp's `input` event (interactive and RPC prompts)
-  and on Grok's `UserPromptSubmit` hook. Use `/steering <name>` elsewhere.
+  and on Grok and Claude Code `UserPromptSubmit` hooks. Use `/steering <name>` elsewhere.
 - Grok hooks require bun on PATH. SessionStart / UserPromptSubmit injection is
   best-effort on Grok 1.0.30 even after the hook runs; see [Grok Build](#grok-build).
   On 1.0.30, plugin-bundled `hooks.json` is discovered but not dispatched — run
   `./hooks/install-user-hook.sh` so `fileMatch` deny can fire.
+- Claude Code hooks require bun on PATH. `Edit`, `Write`, and `NotebookEdit` are blocked by Claude until the file has been read, and that `Read` activates `fileMatch` before the mutation. `additionalContext` is capped at 10,000 characters. A cloud session does not load plugins installed only on your machine.
 - Workspace steering is always read; omp has no project-trust gate.
 - `auto` relies on the model to compare the request with each `description`, so
   descriptions should be precise and specific.
@@ -253,3 +284,4 @@ bun run lint
 - Kiro Steering: <https://kiro.dev/docs/steering/>
 - omp Extensions: <https://omp.sh>
 - Grok plugins: `grok plugin validate` in this checkout
+- Claude Code plugins: <https://code.claude.com/docs/en/plugins-reference>

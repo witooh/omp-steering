@@ -1,0 +1,15 @@
+{
+  "name": "omp-steering",
+  "description": "Load Kiro steering files into Claude Code without rewriting them as project rules.",
+  "owner": {
+    "name": "witooh",
+    "url": "https://github.com/witooh"
+  },
+  "plugins": [
+    {
+      "name": "omp-steering",
+      "source": "./",
+      "description": "Load Kiro steering files (always, fileMatch, manual, auto) into Claude Code."
+    }
+  ]
+}

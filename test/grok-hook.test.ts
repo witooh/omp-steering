@@ -45,6 +45,7 @@ describe("toolPaths", () => {
     expect(toolPaths({ target_directory: "src/components" })).toEqual(["src/components"]);
     expect(toolPaths({ path: "src/app.css:10-20" })).toContain("src/app.css");
     expect(toolPaths({ input: "[src/Button.tsx#1A2B]\nPUT 1.=1:\n" })).toContain("src/Button.tsx");
+    expect(toolPaths({ notebook_path: "src/Button.tsx" })).toEqual(["src/Button.tsx"]);
   });
 });
 
@@ -119,6 +120,8 @@ describe("handleGrokHook", () => {
     expect(deny?.decision).toBe("deny");
     expect(deny?.reason).toContain("React body");
     expect(deny?.reason).toContain("Retry this mutation");
+    expect(deny?.hookSpecificOutput?.permissionDecision).toBe("deny");
+    expect(deny?.hookSpecificOutput?.permissionDecisionReason).toContain("React body");
 
     const retry = await handleGrokHook(
       {
@@ -275,7 +278,7 @@ describe("Grok plugin package", () => {
       groups.flatMap((group) => group.hooks.map((handler) => handler.command)),
     );
     expect(commands.length).toBeGreaterThan(0);
-    const pluginRootCommand = "$" + "{GROK_PLUGIN_ROOT}/hooks/run.sh";
+    const pluginRootCommand = "$" + "{GROK_PLUGIN_ROOT:-$" + "{CLAUDE_PLUGIN_ROOT}}/hooks/run.sh";
     for (const command of commands) {
       expect(command).toContain(pluginRootCommand);
     }
