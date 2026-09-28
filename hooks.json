@@ -1,0 +1,23 @@
+{
+  "omp-steering": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "bash hooks/agy-run.sh PreInvocation",
+        "timeout": 15
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "view_file|write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash hooks/agy-run.sh PreToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

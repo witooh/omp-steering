@@ -5,12 +5,12 @@ description: >
   Use at the start of work in a repo that has .kiro/steering, when the user types
   /steering or #name, and before editing a path that matches fileMatch steering.
 argument-hint: "<name> [request]"
-compatibility: Grok and Claude Code hooks require bun on PATH. This skill itself only needs read access to steering files.
+compatibility: Grok, Claude Code, and Antigravity hooks require bun on PATH. This skill itself only needs read access to steering files.
 ---
 
 # Kiro steering
 
-Follow Kiro steering files already in the project. Do not rewrite them as AGENTS.md, `.grok/rules/`, or `.claude/rules/`.
+Follow Kiro steering files already in the project. Do not rewrite them as AGENTS.md, `.grok/rules/`, `.claude/rules/`, or Antigravity rules.
 
 ## Discover
 
@@ -35,4 +35,4 @@ Skip a file whose frontmatter is invalid; do not guess an inclusion mode.
 
 ## Hooks
 
-Grok and Claude Code hooks inject always/index context and activate `fileMatch` on tool paths. A first matching mutation may be denied once so the steering arrives before the retry. Cursor's hook concatenates the markdown and does not apply inclusion modes. If a hook did not inject, still follow the table above.
+Grok and Claude Code hooks inject always/index context and activate `fileMatch` on tool paths. Antigravity injects that index as a `PreInvocation` ephemeral message and denies the first matching `view_file` or file mutation once so the body arrives in the deny reason. A first matching mutation may be denied once so the steering arrives before the retry. Cursor's hook concatenates the markdown and does not apply inclusion modes. If a hook did not inject, still follow the table above.

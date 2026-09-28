@@ -1,6 +1,6 @@
 # omp-steering
 
-An omp extension, Grok plugin, Cursor plugin, and Claude Code plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
+An omp extension, Grok plugin, Cursor plugin, Claude Code plugin, and Antigravity plugin that reads [Kiro Steering](https://kiro.dev/docs/steering/)
 from existing projects without requiring files to be moved or rules to be
 rewritten.
 
@@ -27,6 +27,7 @@ On omp, `always` files are appended to the system prompt. On Grok and Claude Cod
 emitted from session start (and the first prompt, when that hook runs) and from the
 `/steering` skill. Grok injection is best-effort; see [Grok Build](#grok-build).
 Claude Code delivers that context; see [Claude Code](#claude-code).
+On Antigravity they are injected as a `PreInvocation` ephemeral message; see [Antigravity](#antigravity).
 On Cursor, the plugin hook concatenates every steering markdown file into the
 session and does not apply inclusion modes.
 
@@ -156,6 +157,28 @@ claude plugin install omp-steering@omp-steering
 
 Claude Code delivers `SessionStart` and `UserPromptSubmit` `additionalContext`. A matching `Read` delivers the `fileMatch` body through `PreToolUse` `additionalContext`. `Edit`, `Write`, and `NotebookEdit` do not reach that hook until the file has been read, so that read is the usual activation. A mutation is denied once only when it is the first matching call. `additionalContext` and deny reasons are capped at 10,000 characters. The first `UserPromptSubmit` repeats the session index. A cloud session does not load plugins installed only on your machine.
 
+### Antigravity
+
+The repo root is an Antigravity plugin (`plugin.json`, `hooks.json`, `skills/steering`). `agy` reads `hooks.json` at the plugin root, not `hooks/hooks.json`. bun must be on PATH so the hooks can run. Hook commands are relative `bash` paths: agy does not expand `${...}`.
+
+```bash
+agy plugin install https://github.com/witooh/omp-steering
+```
+
+Local checkout:
+
+```bash
+agy plugin install .
+```
+
+That stages the repo under `~/.gemini/config/plugins/omp-steering`. The CLI and the IDE load plugins from that directory. Start a new session after installing.
+
+```bash
+agy plugin uninstall omp-steering
+```
+
+There is no `SessionStart` or `UserPromptSubmit` event. `PreInvocation` injects always bodies and the steering index as an `ephemeralMessage` before each model call. The first matching `view_file`, `write_to_file`, `replace_file_content`, or `multi_replace_file_content` is denied once so the `fileMatch` body arrives in `reason`; the retry is allowed. `#name` expands from the latest `USER_INPUT` already written to `transcriptPath`. If that line is not there yet, use `/steering <name>`. Injected text is capped at 10,000 characters. The workspace root is the first `workspacePaths` entry.
+
 ## Examples
 
 ### Always included
@@ -197,9 +220,12 @@ steering file to the conversation context. For the first matching mutation
 retry after the steering instructions have been delivered. On Claude Code the
 same deny applies only if `Edit`, `Write`, or `NotebookEdit` is the first
 matching call. A prior matching `Read` already delivered the body, so the
-later mutation is not denied by this plugin.
+later mutation is not denied by this plugin. On Antigravity the first matching
+`view_file`, `write_to_file`, `replace_file_content`, or
+`multi_replace_file_content` is denied once and the body is placed in `reason`.
 Targets are read from `path` / `paths` (omp), `target_file` / `file_path` /
-`target_directory` (Grok), `file_path` / `notebook_path` (Claude Code), from `[path#TAG]` section headers of a hashline
+`target_directory` (Grok), `file_path` / `notebook_path` (Claude Code),
+`AbsolutePath` / `TargetFile` (Antigravity), from `[path#TAG]` section headers of a hashline
 `edit` patch, and from `*** Update File:` envelopes in apply_patch mode.
 
 A pattern without a `/` also matches by basename, so `"*.tsx"` covers
@@ -256,8 +282,9 @@ The path must remain inside the workspace. Each referenced file is limited to
   Shell commands and custom tools that hide paths inside command text rely on
   the steering index, which instructs the agent to load matching rules before
   proceeding.
-- `#name` expansion runs on omp's `input` event (interactive and RPC prompts)
-  and on Grok and Claude Code `UserPromptSubmit` hooks. Use `/steering <name>` elsewhere.
+- `#name` expansion runs on omp's `input` event (interactive and RPC prompts),
+  on Grok and Claude Code `UserPromptSubmit` hooks, and on Antigravity from the
+  latest `USER_INPUT` in `transcriptPath`. Use `/steering <name>` elsewhere.
 - Grok hooks require bun on PATH. SessionStart / UserPromptSubmit injection is
   best-effort on Grok 1.0.30 even after the hook runs; see [Grok Build](#grok-build).
   On 1.0.30, plugin-bundled `hooks.json` is discovered but not dispatched — run
@@ -270,6 +297,7 @@ The path must remain inside the workspace. Each referenced file is limited to
 - Steering files with invalid frontmatter are skipped with a warning rather than
   loaded under the wrong inclusion mode.
 - Cursor's hook injects every steering markdown file at `sessionStart` and ignores inclusion modes. `sessionStart` does not run in cloud agents, so a Cloud Agent only has the `/steering` skill from `install-cursor-cloud.sh`.
+- Antigravity hooks require bun on PATH. The hook contract was checked against agy 1.2.12 (`plugin validate` and `plugin install` also succeed on 1.0.8, but that build's runtime dispatch was not checked). There is no session-start event, so always steering is re-injected as a transient `ephemeralMessage` on each `PreInvocation`. `fileMatch` cannot be attached to a successful `view_file`; the first matching file tool is denied once. Multi-root workspaces use `workspacePaths[0]`.
 
 ## Development
 
@@ -285,3 +313,4 @@ bun run lint
 - omp Extensions: <https://omp.sh>
 - Grok plugins: `grok plugin validate` in this checkout
 - Claude Code plugins: <https://code.claude.com/docs/en/plugins-reference>
+- Antigravity plugins: <https://antigravity.google/docs/plugins>

@@ -1,7 +1,7 @@
 {
   "name": "@witooh/omp-steering",
   "version": "0.2.0",
-  "description": "Load Kiro steering files into omp, Grok, and Claude Code",
+  "description": "Load Kiro steering files into omp, Grok, Claude Code, and Antigravity",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -15,6 +15,7 @@
     "grok",
     "kiro",
     "claude",
+    "antigravity",
     "steering"
   ],
   "files": [

@@ -17,6 +17,11 @@ const PATH_FIELDS = [
   "targetDirectory",
   "notebook_path",
   "notebookPath",
+  "AbsolutePath",
+  "TargetFile",
+  "DirectoryPath",
+  "SearchDirectory",
+  "SearchPath",
 ];
 
 export async function renderSteeringPrompt(files: SteeringFile[], workspaceRoot: string): Promise<string> {
@@ -90,9 +95,10 @@ export function namedSteeringByName(files: SteeringFile[]): Map<string, Steering
 
 /**
  * Every filesystem target the call touches: path-like tool fields (omp `path`/`paths`,
- * Grok `target_file`/`file_path`/`target_directory`, Claude `file_path`/`notebook_path`),
- * hashline `[path#TAG]` headers, and apply_patch file envelopes. A `read` path may carry
- * a selector suffix (`file.ts:50-200`), so its bare path is offered as well.
+ * Grok `target_file`/`file_path`/`target_directory`, Claude `file_path`/`notebook_path`,
+ * Antigravity `AbsolutePath`/`TargetFile`), hashline `[path#TAG]` headers, and apply_patch
+ * file envelopes. A `read` path may carry a selector suffix (`file.ts:50-200`), so its bare
+ * path is offered as well.
  */
 export function toolPaths(input: unknown): string[] {
   if (input === null || typeof input !== "object") return [];

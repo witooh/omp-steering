@@ -2,13 +2,13 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "omp-steering",
   "version": "0.2.0",
-  "description": "Load Kiro steering files into Grok and omp without rewriting them as project rules.",
+  "description": "Load Kiro steering files into omp, Grok, Claude Code, and Antigravity without rewriting them as project rules.",
   "author": {
     "name": "witooh"
   },
   "homepage": "https://github.com/witooh/omp-steering",
   "repository": "https://github.com/witooh/omp-steering",
   "license": "MIT",
-  "keywords": ["omp", "grok", "kiro", "steering"],
+  "keywords": ["omp", "grok", "claude", "antigravity", "kiro", "steering"],
   "hooks": "./hooks/hooks.json"
 }
